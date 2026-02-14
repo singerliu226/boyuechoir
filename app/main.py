@@ -37,21 +37,14 @@ from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
 
 from app.logger import get_logger
+from app.models import TranscriptionResult
 from app.transcriber_cloud import CloudTranscriber
 from app.lrc_formatter import LrcFormatter, parse_lrc
 
 # 本地 Whisper / Demucs 使用懒导入，部署环境可能不安装这些重型依赖
 # 只在实际调用 _get_transcriber() / _get_separator() 时才 import
-try:
-    from app.transcriber import Transcriber, TranscriptionResult
-except ImportError:
-    Transcriber = None  # type: ignore
-    TranscriptionResult = None  # type: ignore
-
-try:
-    from app.separator import VocalSeparator
-except ImportError:
-    VocalSeparator = None  # type: ignore
+Transcriber = None
+VocalSeparator = None
 
 logger = get_logger("main")
 
@@ -91,16 +84,21 @@ def _get_transcriber():
     """
     获取或创建全局本地 Transcriber 单例（降级方案）。
 
-    在云端部署环境中可能不安装 faster-whisper，
-    此时返回 None，调用方应处理这种情况。
+    使用懒导入：只有在真正需要时才 import faster-whisper，
+    部署环境不安装时不会导致启动失败。
     """
-    global _transcriber
-    if Transcriber is None:
+    global _transcriber, Transcriber
+    if _transcriber is not None:
+        return _transcriber
+    try:
+        if Transcriber is None:
+            from app.transcriber import Transcriber as _Cls
+            Transcriber = _Cls
+        _transcriber = Transcriber(model_size="large-v3")
+        return _transcriber
+    except ImportError:
         logger.warning("本地 Whisper 模块不可用（未安装 faster-whisper）")
         return None
-    if _transcriber is None:
-        _transcriber = Transcriber(model_size="large-v3")
-    return _transcriber
 
 
 def _get_cloud_transcriber() -> Optional[CloudTranscriber]:
@@ -120,13 +118,18 @@ def _get_cloud_transcriber() -> Optional[CloudTranscriber]:
 
 def _get_separator():
     """获取或创建全局 VocalSeparator 单例。云端部署时可能不可用。"""
-    global _separator
-    if VocalSeparator is None:
+    global _separator, VocalSeparator
+    if _separator is not None:
+        return _separator
+    try:
+        if VocalSeparator is None:
+            from app.separator import VocalSeparator as _Cls
+            VocalSeparator = _Cls
+        _separator = VocalSeparator()
+        return _separator
+    except ImportError:
         logger.warning("人声分离模块不可用（未安装 demucs）")
         return None
-    if _separator is None:
-        _separator = VocalSeparator()
-    return _separator
 
 
 # ----- 请求/响应模型 -----
@@ -337,7 +340,7 @@ async def _run_transcription(task_id: str, request: TranscribeRequest):
 
         # 策略 2：降级到本地 Whisper（云端部署时可能不可用）
         if result is None:
-            if Transcriber is None:
+            if _get_transcriber() is None:
                 raise RuntimeError(
                     "云端转录失败且本地模型不可用。请检查 API Key 是否正确。"
                 )

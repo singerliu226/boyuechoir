@@ -26,7 +26,7 @@ from typing import Optional
 import requests
 
 from app.logger import get_logger
-from app.transcriber import TranscribedSegment, TranscribedWord, TranscriptionResult
+from app.models import TranscribedSegment, TranscribedWord, TranscriptionResult
 
 logger = get_logger("transcriber_cloud")
 

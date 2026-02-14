@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from app.logger import get_logger
-from app.transcriber import TranscriptionResult, TranscribedSegment
+from app.models import TranscriptionResult, TranscribedSegment
 
 logger = get_logger("lrc_formatter")
 
