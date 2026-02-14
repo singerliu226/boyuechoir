@@ -1,0 +1,14 @@
+# Web framework
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+python-multipart>=0.0.18
+
+# Cloud ASR (阿里云百炼 Fun-ASR)
+dashscope>=1.20.0
+requests>=2.31.0
+
+# Audio processing (pydub 需要系统安装 ffmpeg)
+pydub>=0.25.1
+
+# SSL certificates (macOS/容器环境)
+certifi>=2024.0.0

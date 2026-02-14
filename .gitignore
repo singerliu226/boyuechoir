@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual Environment
+venv/
+.venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Logs
+logs/
+
+# Uploads (用户上传的临时音频)
+uploads/
+
+# Separated audio (人声分离输出)
+separated/
+
+# Whisper model cache
+models/
+
+# Environment
+.env
+.env.local
+
+# Test files
+test_*.py
+/tmp/

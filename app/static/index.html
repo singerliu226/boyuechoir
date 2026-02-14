@@ -1,0 +1,1262 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LyricSync - 网易云歌词自动对齐</title>
+    <!-- WaveSurfer.js 用于音频波形可视化 -->
+    <script src="https://unpkg.com/wavesurfer.js@7"></script>
+    <style>
+        /* ===== 全局重置与基础样式 ===== */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --primary: #ec4141;       /* 网易云红 */
+            --primary-hover: #d63636;
+            --bg: #1a1a2e;
+            --bg-card: #16213e;
+            --bg-input: #0f3460;
+            --text: #e8e8e8;
+            --text-muted: #8b8b9e;
+            --border: #2a2a4a;
+            --success: #4ecdc4;
+            --warning: #ffe66d;
+            --radius: 12px;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+                         'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
+        a { color: var(--primary); text-decoration: none; }
+
+        /* ===== 布局 ===== */
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 24px 20px;
+        }
+
+        /* ===== 头部 ===== */
+        .header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+        .header h1 {
+            font-size: 28px;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--primary), #ff6b6b);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .header p {
+            color: var(--text-muted);
+            margin-top: 6px;
+            font-size: 14px;
+        }
+
+        /* ===== 卡片容器 ===== */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 24px;
+            margin-bottom: 20px;
+        }
+        .card-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .card-title .step {
+            background: var(--primary);
+            color: #fff;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        /* ===== 拖拽上传区 ===== */
+        .upload-zone {
+            border: 2px dashed var(--border);
+            border-radius: var(--radius);
+            padding: 48px 24px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            position: relative;
+        }
+        .upload-zone:hover,
+        .upload-zone.dragover {
+            border-color: var(--primary);
+            background: rgba(236, 65, 65, 0.05);
+        }
+        .upload-zone .icon {
+            font-size: 48px;
+            margin-bottom: 12px;
+            opacity: 0.6;
+        }
+        .upload-zone p {
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+        .upload-zone .formats {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: 8px;
+            opacity: 0.7;
+        }
+        .upload-zone input[type="file"] {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+        .file-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            background: var(--bg-input);
+            border-radius: 8px;
+            margin-top: 12px;
+        }
+        .file-info .name {
+            flex: 1;
+            font-size: 14px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .file-info .size { color: var(--text-muted); font-size: 13px; }
+
+        /* ===== 设置区 ===== */
+        .settings {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+        @media (max-width: 640px) {
+            .settings { grid-template-columns: 1fr; }
+        }
+        .setting-group label {
+            display: block;
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+        }
+        .setting-group select,
+        .setting-group input[type="number"],
+        .setting-group input[type="password"] {
+            width: 100%;
+            padding: 8px 12px;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            font-size: 14px;
+            outline: none;
+        }
+        .setting-group select:focus,
+        .setting-group input:focus {
+            border-color: var(--primary);
+        }
+        .api-key-group {
+            grid-column: 1 / -1;
+        }
+        .api-key-hint {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: 4px;
+            display: block;
+            line-height: 1.5;
+        }
+        .api-key-hint a {
+            color: var(--primary);
+        }
+        .api-key-badge {
+            display: inline-block;
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            margin-left: 8px;
+            vertical-align: middle;
+        }
+        .badge-cloud {
+            background: rgba(78, 205, 196, 0.15);
+            color: var(--success);
+        }
+        .badge-local {
+            background: rgba(255, 230, 109, 0.15);
+            color: var(--warning);
+        }
+
+        /* ===== 按钮 ===== */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 10px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-primary {
+            background: var(--primary);
+            color: #fff;
+        }
+        .btn-primary:hover:not(:disabled) {
+            background: var(--primary-hover);
+            transform: translateY(-1px);
+        }
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .btn-secondary {
+            background: var(--bg-input);
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+        .btn-secondary:hover {
+            border-color: var(--primary);
+        }
+        .btn-success {
+            background: var(--success);
+            color: #1a1a2e;
+        }
+        .btn-success:hover {
+            opacity: 0.9;
+        }
+        .btn-row {
+            display: flex;
+            gap: 12px;
+            margin-top: 16px;
+            flex-wrap: wrap;
+        }
+
+        /* ===== 进度条 ===== */
+        .progress-section {
+            margin-top: 16px;
+            display: none;
+        }
+        .progress-section.active { display: block; }
+        .progress-bar-bg {
+            background: var(--bg-input);
+            border-radius: 10px;
+            height: 8px;
+            overflow: hidden;
+        }
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), #ff6b6b);
+            border-radius: 10px;
+            transition: width 0.5s ease;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        .progress-text {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-top: 8px;
+            text-align: center;
+        }
+
+        /* ===== 模式切换标签 ===== */
+        .mode-tabs {
+            display: flex;
+            gap: 0;
+            margin-bottom: 16px;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+        }
+        .mode-tab {
+            flex: 1;
+            padding: 10px 16px;
+            background: var(--bg-input);
+            color: var(--text-muted);
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.2s;
+            text-align: center;
+        }
+        .mode-tab:not(:last-child) {
+            border-right: 1px solid var(--border);
+        }
+        .mode-tab.active {
+            background: var(--primary);
+            color: #fff;
+        }
+        .mode-tab:hover:not(.active) {
+            background: rgba(236, 65, 65, 0.1);
+            color: var(--text);
+        }
+
+        /* ===== 歌词输入区 ===== */
+        .lyrics-input-area {
+            display: none;
+        }
+        .lyrics-input-area.active { display: block; }
+        .lyrics-textarea-input {
+            width: 100%;
+            min-height: 180px;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            padding: 16px;
+            font-family: inherit;
+            font-size: 14px;
+            line-height: 1.8;
+            resize: vertical;
+            outline: none;
+        }
+        .lyrics-textarea-input:focus { border-color: var(--primary); }
+        .lyrics-textarea-input::placeholder { color: var(--text-muted); opacity: 0.6; }
+        .lyrics-hint {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: 6px;
+            line-height: 1.5;
+        }
+
+        /* ===== 波形播放器 ===== */
+        .waveform-container {
+            display: none;
+        }
+        .waveform-container.active { display: block; }
+        #waveform {
+            border-radius: 8px;
+            overflow: hidden;
+            margin-bottom: 12px;
+        }
+        .player-controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .play-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--primary);
+            color: #fff;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+        .play-btn:hover { background: var(--primary-hover); }
+        .time-display {
+            font-size: 13px;
+            color: var(--text-muted);
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* ===== 歌词编辑器 ===== */
+        .lyrics-editor {
+            display: none;
+        }
+        .lyrics-editor.active { display: block; }
+        .lyrics-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .lyrics-table thead th {
+            text-align: left;
+            padding: 8px 12px;
+            font-size: 12px;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--border);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .lyrics-table tbody tr {
+            transition: background 0.15s;
+            cursor: pointer;
+        }
+        .lyrics-table tbody tr:hover {
+            background: rgba(236, 65, 65, 0.08);
+        }
+        .lyrics-table tbody tr.active {
+            background: rgba(236, 65, 65, 0.15);
+        }
+        .lyrics-table td {
+            padding: 6px 12px;
+            font-size: 14px;
+            border-bottom: 1px solid rgba(42, 42, 74, 0.5);
+            vertical-align: middle;
+        }
+        .lyrics-table .col-index {
+            width: 40px;
+            color: var(--text-muted);
+            font-size: 12px;
+        }
+        .lyrics-table .col-time { width: 120px; }
+        .lyrics-table .col-text { }
+        .lyrics-table .col-actions { width: 80px; text-align: right; }
+
+        .time-input,
+        .text-input {
+            background: transparent;
+            border: 1px solid transparent;
+            color: var(--text);
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 14px;
+            width: 100%;
+            font-family: inherit;
+        }
+        .time-input:focus,
+        .text-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            background: var(--bg-input);
+        }
+        .time-input { font-variant-numeric: tabular-nums; width: 90px; }
+
+        .action-btn {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 4px;
+            font-size: 16px;
+            border-radius: 4px;
+        }
+        .action-btn:hover { color: var(--primary); background: rgba(236,65,65,0.1); }
+
+        /* ===== LRC 输出区 ===== */
+        .lrc-output {
+            display: none;
+        }
+        .lrc-output.active { display: block; }
+        .lrc-textarea {
+            width: 100%;
+            min-height: 200px;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            padding: 16px;
+            font-family: 'Menlo', 'Monaco', 'Consolas', monospace;
+            font-size: 13px;
+            line-height: 1.8;
+            resize: vertical;
+            outline: none;
+        }
+        .lrc-textarea:focus { border-color: var(--primary); }
+
+        /* ===== 提示 Toast ===== */
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 12px 20px;
+            background: var(--success);
+            color: #1a1a2e;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            z-index: 9999;
+            transform: translateX(120%);
+            transition: transform 0.3s ease;
+        }
+        .toast.show { transform: translateX(0); }
+
+        /* ===== 统计信息 ===== */
+        .stats {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+        .stat-item {
+            background: var(--bg-input);
+            padding: 10px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+        }
+        .stat-item .label { color: var(--text-muted); margin-right: 6px; }
+        .stat-item .value { color: var(--success); font-weight: 600; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 头部 -->
+        <div class="header">
+            <h1>LyricSync</h1>
+            <p>网易云歌词自动对齐工具 - 上传音频，AI 自动生成滚动歌词</p>
+        </div>
+
+        <!-- 步骤 1：上传音频 -->
+        <div class="card">
+            <div class="card-title">
+                <span class="step">1</span>
+                上传音频文件
+            </div>
+            <div class="upload-zone" id="uploadZone">
+                <div class="icon">&#127925;</div>
+                <p>拖拽音频文件到此处，或点击选择文件</p>
+                <div class="formats">支持 MP3 / WAV / FLAC / OGG / M4A / AAC</div>
+                <input type="file" id="fileInput" accept=".mp3,.wav,.flac,.ogg,.m4a,.aac,.wma">
+            </div>
+            <div class="file-info" id="fileInfo" style="display:none">
+                <span>&#127926;</span>
+                <span class="name" id="fileName"></span>
+                <span class="size" id="fileSize"></span>
+            </div>
+
+            <!-- 设置选项 -->
+            <div class="settings" style="margin-top:16px">
+                <div class="setting-group api-key-group">
+                    <label>
+                        AI 识别密钥（API Key）
+                        <span class="api-key-badge badge-cloud" id="modeBadge">云端极速模式</span>
+                    </label>
+                    <input type="password" id="apiKey" placeholder="输入阿里云百炼 API Key，获得极速识别体验">
+                    <span class="api-key-hint">
+                        填写后使用云端 AI 识别（几秒出结果），不填则使用本地模型（较慢）。
+                        <a href="https://bailian.console.aliyun.com/?apiKey=1#/api-key" target="_blank">点此获取 Key</a>
+                    </span>
+                </div>
+                <div class="setting-group">
+                    <label>歌曲语言</label>
+                    <select id="language">
+                        <option value="zh" selected>中文</option>
+                        <option value="en">英文</option>
+                        <option value="ja">日语</option>
+                        <option value="ko">韩语</option>
+                        <option value="auto">自动检测（不推荐）</option>
+                    </select>
+                </div>
+                <div class="setting-group">
+                    <label>歌词提前显示时间</label>
+                    <input type="number" id="offsetSeconds" value="0.3" min="0" max="2" step="0.1">
+                    <span style="font-size:12px;color:var(--text-muted);margin-top:4px;display:block">歌词会比演唱提前这么多秒显示，方便跟唱（推荐 0.3）</span>
+                </div>
+            </div>
+
+            <!-- 模式切换 -->
+            <div class="mode-tabs" style="margin-top:16px">
+                <button class="mode-tab active" id="tabAuto" data-mode="auto">
+                    &#9889; AI 自动识别
+                </button>
+                <button class="mode-tab" id="tabManual" data-mode="manual">
+                    &#9998; 手动输入歌词配对
+                </button>
+            </div>
+
+            <!-- 手动歌词输入区域（默认隐藏） -->
+            <div class="lyrics-input-area" id="lyricsInputArea">
+                <textarea class="lyrics-textarea-input" id="lyricsInput"
+                    placeholder="在这里粘贴或输入歌词，每行一句&#10;&#10;例如：&#10;月光洒在窗前&#10;思念在心间蔓延&#10;轻轻哼着旋律&#10;陪你到永远"></textarea>
+                <div class="lyrics-hint">
+                    每行一句歌词，系统会自动根据音频节奏匹配时间轴。
+                    如果云端识别能获取到时间信息，将进行智能配对；否则按音频时长均匀分配。
+                </div>
+            </div>
+
+            <!-- 开始按钮 -->
+            <div class="btn-row">
+                <button class="btn btn-primary" id="btnTranscribe" disabled>
+                    &#9654; 开始识别歌词
+                </button>
+                <button class="btn btn-primary" id="btnAlign" disabled style="display:none">
+                    &#128279; 开始歌词配对
+                </button>
+            </div>
+
+            <!-- 进度条 -->
+            <div class="progress-section" id="progressSection">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar" id="progressBar" style="width: 10%"></div>
+                </div>
+                <div class="progress-text" id="progressText">准备中...</div>
+            </div>
+        </div>
+
+        <!-- 步骤 2：波形播放器 + 歌词编辑器 -->
+        <div class="card waveform-container" id="editorCard">
+            <div class="card-title">
+                <span class="step">2</span>
+                预览 & 编辑歌词
+            </div>
+
+            <!-- 识别统计 -->
+            <div class="stats" id="statsArea"></div>
+
+            <!-- 音频波形 -->
+            <div id="waveform"></div>
+            <div class="player-controls">
+                <button class="play-btn" id="btnPlay">&#9654;</button>
+                <span class="time-display">
+                    <span id="currentTime">00:00</span> / <span id="totalTime">00:00</span>
+                </span>
+            </div>
+
+            <!-- 歌词编辑表格 -->
+            <div class="lyrics-editor active" style="margin-top:20px; max-height:400px; overflow-y:auto;">
+                <table class="lyrics-table">
+                    <thead>
+                        <tr>
+                            <th class="col-index">#</th>
+                            <th class="col-time">时间</th>
+                            <th class="col-text">歌词</th>
+                            <th class="col-actions">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="lyricsBody"></tbody>
+                </table>
+            </div>
+
+            <div class="btn-row">
+                <button class="btn btn-secondary" id="btnAddLine">+ 添加一行歌词</button>
+                <button class="btn btn-primary" id="btnRefreshLrc">&#8635; 更新歌词预览</button>
+            </div>
+        </div>
+
+        <!-- 步骤 3：LRC 输出 -->
+        <div class="card lrc-output" id="lrcOutputCard">
+            <div class="card-title">
+                <span class="step">3</span>
+                复制歌词 &rarr; 粘贴到网易云提交
+            </div>
+            <textarea class="lrc-textarea" id="lrcTextarea" readonly></textarea>
+            <div class="btn-row">
+                <button class="btn btn-success" id="btnCopy">&#128203; 一键复制</button>
+                <button class="btn btn-secondary" id="btnDownload">&#11015; 下载 .lrc 文件</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast 提示 -->
+    <div class="toast" id="toast"></div>
+
+    <script>
+    /**
+     * LyricSync 前端应用
+     *
+     * 核心流程：
+     * 1. 用户拖拽/选择音频文件 -> 上传到后端
+     * 2. 发起转录请求 -> 轮询任务状态
+     * 3. 转录完成 -> 渲染波形播放器 + 歌词编辑表格
+     * 4. 用户微调歌词 -> 实时刷新 LRC 输出
+     * 5. 一键复制 -> 粘贴到网易云
+     */
+    (function() {
+        'use strict';
+
+        // ===== DOM 元素引用 =====
+        const $uploadZone  = document.getElementById('uploadZone');
+        const $fileInput   = document.getElementById('fileInput');
+        const $fileInfo    = document.getElementById('fileInfo');
+        const $fileName    = document.getElementById('fileName');
+        const $fileSize    = document.getElementById('fileSize');
+        const $apiKey      = document.getElementById('apiKey');
+        const $modeBadge   = document.getElementById('modeBadge');
+        const $language     = document.getElementById('language');
+        const $offsetSec   = document.getElementById('offsetSeconds');
+        const $tabAuto     = document.getElementById('tabAuto');
+        const $tabManual   = document.getElementById('tabManual');
+        const $lyricsInputArea = document.getElementById('lyricsInputArea');
+        const $lyricsInput = document.getElementById('lyricsInput');
+        const $btnTranscribe = document.getElementById('btnTranscribe');
+        const $btnAlign    = document.getElementById('btnAlign');
+        const $progressSection = document.getElementById('progressSection');
+        const $progressBar = document.getElementById('progressBar');
+        const $progressText = document.getElementById('progressText');
+        const $editorCard  = document.getElementById('editorCard');
+        const $statsArea   = document.getElementById('statsArea');
+        const $lyricsBody  = document.getElementById('lyricsBody');
+        const $btnPlay     = document.getElementById('btnPlay');
+        const $currentTime = document.getElementById('currentTime');
+        const $totalTime   = document.getElementById('totalTime');
+        const $btnAddLine  = document.getElementById('btnAddLine');
+        const $btnRefreshLrc = document.getElementById('btnRefreshLrc');
+        const $lrcOutputCard = document.getElementById('lrcOutputCard');
+        const $lrcTextarea = document.getElementById('lrcTextarea');
+        const $btnCopy     = document.getElementById('btnCopy');
+        const $btnDownload = document.getElementById('btnDownload');
+        const $toast       = document.getElementById('toast');
+
+        // ===== API Key 模式切换提示 =====
+        $apiKey.addEventListener('input', function() {
+            if ($apiKey.value.trim()) {
+                $modeBadge.textContent = '云端极速模式';
+                $modeBadge.className = 'api-key-badge badge-cloud';
+            } else {
+                $modeBadge.textContent = '本地模式（较慢）';
+                $modeBadge.className = 'api-key-badge badge-local';
+            }
+        });
+
+        // ===== 模式切换（自动识别 / 手动配对） =====
+        let currentMode = 'auto';  // 'auto' 或 'manual'
+
+        function switchMode(mode) {
+            currentMode = mode;
+            // 切换 tab 样式
+            $tabAuto.classList.toggle('active', mode === 'auto');
+            $tabManual.classList.toggle('active', mode === 'manual');
+            // 切换歌词输入区
+            $lyricsInputArea.classList.toggle('active', mode === 'manual');
+            // 切换按钮显示
+            $btnTranscribe.style.display = mode === 'auto' ? '' : 'none';
+            $btnAlign.style.display = mode === 'manual' ? '' : 'none';
+            // 更新按钮可用状态
+            updateButtonStates();
+        }
+
+        function updateButtonStates() {
+            if (currentMode === 'auto') {
+                $btnTranscribe.disabled = !currentFile;
+            } else {
+                // 手动模式需要同时有文件和歌词
+                $btnAlign.disabled = !currentFile || !$lyricsInput.value.trim();
+            }
+        }
+
+        $tabAuto.addEventListener('click', function() { switchMode('auto'); });
+        $tabManual.addEventListener('click', function() { switchMode('manual'); });
+        $lyricsInput.addEventListener('input', updateButtonStates);
+
+        // ===== 应用状态 =====
+        let currentFile = null;    // 当前选择的音频文件
+        let currentTaskId = null;  // 当前转录任务 ID
+        let segments = [];         // 歌词段落数据
+        let wavesurfer = null;     // WaveSurfer 实例
+        let isPlaying = false;
+
+        // ===== 工具函数 =====
+
+        /** 格式化文件大小为可读字符串 */
+        function formatSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+
+        /** 将秒数格式化为 mm:ss 显示 */
+        function formatTime(seconds) {
+            const m = Math.floor(seconds / 60);
+            const s = Math.floor(seconds % 60);
+            return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+        }
+
+        /** 将秒数格式化为 mm:ss.xx (LRC 时间格式) */
+        function formatLrcTime(seconds) {
+            seconds = Math.max(0, seconds);
+            const m = Math.floor(seconds / 60);
+            const s = seconds % 60;
+            return `${String(m).padStart(2, '0')}:${s.toFixed(2).padStart(5, '0')}`;
+        }
+
+        /** 解析 mm:ss.xx 格式为秒数 */
+        function parseLrcTime(timeStr) {
+            const match = timeStr.match(/^(\d{1,2}):(\d{2}\.\d{1,3})$/);
+            if (!match) return 0;
+            return parseInt(match[1]) * 60 + parseFloat(match[2]);
+        }
+
+        /** 显示 Toast 提示 */
+        function showToast(message, duration) {
+            duration = duration || 2000;
+            $toast.textContent = message;
+            $toast.classList.add('show');
+            setTimeout(function() { $toast.classList.remove('show'); }, duration);
+        }
+
+        // ===== 文件上传 =====
+
+        /** 处理文件选择（拖拽或点击） */
+        function handleFile(file) {
+            if (!file) return;
+
+            const ext = file.name.split('.').pop().toLowerCase();
+            const allowed = ['mp3', 'wav', 'flac', 'ogg', 'm4a', 'aac', 'wma'];
+            if (allowed.indexOf(ext) === -1) {
+                showToast('不支持的格式: .' + ext);
+                return;
+            }
+
+            currentFile = file;
+            $fileInfo.style.display = 'flex';
+            $fileName.textContent = file.name;
+            $fileSize.textContent = formatSize(file.size);
+            updateButtonStates();
+        }
+
+        // 拖拽事件
+        $uploadZone.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            $uploadZone.classList.add('dragover');
+        });
+        $uploadZone.addEventListener('dragleave', function() {
+            $uploadZone.classList.remove('dragover');
+        });
+        $uploadZone.addEventListener('drop', function(e) {
+            e.preventDefault();
+            $uploadZone.classList.remove('dragover');
+            if (e.dataTransfer.files.length > 0) {
+                handleFile(e.dataTransfer.files[0]);
+            }
+        });
+        $fileInput.addEventListener('change', function() {
+            if ($fileInput.files.length > 0) {
+                handleFile($fileInput.files[0]);
+            }
+        });
+
+        // ===== 转录流程 =====
+
+        /** 上传文件到后端 */
+        async function uploadFile(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const resp = await fetch('/api/upload', { method: 'POST', body: formData });
+            if (!resp.ok) {
+                const err = await resp.json();
+                throw new Error(err.detail || '上传失败');
+            }
+            return await resp.json();
+        }
+
+        /** 发起转录请求 */
+        async function startTranscription(taskId) {
+            const apiKey = $apiKey.value.trim();
+            const resp = await fetch('/api/transcribe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    task_id: taskId,
+                    api_key: apiKey || null,
+                    use_separator: false,
+                    language: $language.value === 'auto' ? null : $language.value,
+                }),
+            });
+            if (!resp.ok) {
+                const err = await resp.json();
+                throw new Error(err.detail || '转录请求失败');
+            }
+        }
+
+        /** 轮询任务状态 */
+        async function pollStatus(taskId) {
+            const progressSteps = {
+                '正在上传音频到云端': 20,
+                '云端正在识别': 50,
+                '正在去除伴奏': 20,
+                '伴奏去除完成': 35,
+                '正在加载': 45,
+                '正在用本地模型识别': 55,
+                '正在识别': 60,
+                '正在生成': 85,
+                '转录完成': 100,
+            };
+
+            while (true) {
+                await new Promise(function(r) { setTimeout(r, 2000); });
+
+                const resp = await fetch('/api/status/' + taskId);
+                const data = await resp.json();
+
+                // 更新进度条
+                let progress = 10;
+                for (var key in progressSteps) {
+                    if (data.progress && data.progress.indexOf(key) !== -1) {
+                        progress = progressSteps[key];
+                    }
+                }
+                $progressBar.style.width = progress + '%';
+                $progressText.textContent = data.progress || '处理中...';
+
+                if (data.status === 'completed') {
+                    return data.result;
+                }
+                if (data.status === 'failed') {
+                    throw new Error(data.error || '转录失败');
+                }
+            }
+        }
+
+        /** 主转录流程 */
+        $btnTranscribe.addEventListener('click', async function() {
+            if (!currentFile) return;
+
+            $btnTranscribe.disabled = true;
+            $progressSection.classList.add('active');
+            $progressBar.style.width = '5%';
+            $progressText.textContent = '正在上传歌曲...';
+
+            try {
+                // 步骤 1：上传
+                var uploadResult = await uploadFile(currentFile);
+                currentTaskId = uploadResult.task_id;
+                $progressBar.style.width = '10%';
+                $progressText.textContent = '上传完成，开始识别歌词...';
+
+                // 步骤 2：发起转录
+                await startTranscription(currentTaskId);
+
+                // 步骤 3：轮询等待结果
+                var result = await pollStatus(currentTaskId);
+
+                // 步骤 4：渲染结果
+                $progressBar.style.width = '100%';
+                $progressText.textContent = '完成!';
+
+                segments = result.segments;
+                renderStats(result);
+                renderLyricsTable();
+                initWaveSurfer(currentTaskId);
+                renderLrcOutput(result.lrc_text);
+
+                $editorCard.classList.add('active');
+                $lrcOutputCard.classList.add('active');
+
+                showToast('识别完成! 共找到 ' + result.segment_count + ' 句歌词');
+
+            } catch (err) {
+                $progressText.textContent = '出错了: ' + err.message;
+                $progressBar.style.width = '100%';
+                showToast('识别失败: ' + err.message, 4000);
+                $btnTranscribe.disabled = false;
+            }
+        });
+
+        // ===== 手动歌词配对流程 =====
+
+        $btnAlign.addEventListener('click', async function() {
+            if (!currentFile || !$lyricsInput.value.trim()) return;
+
+            $btnAlign.disabled = true;
+            $progressSection.classList.add('active');
+            $progressBar.style.width = '5%';
+            $progressText.textContent = '正在上传歌曲...';
+
+            try {
+                // 步骤 1：上传（如果还没上传）
+                if (!currentTaskId) {
+                    var uploadResult = await uploadFile(currentFile);
+                    currentTaskId = uploadResult.task_id;
+                }
+                $progressBar.style.width = '20%';
+                $progressText.textContent = '正在分析音频并配对歌词...';
+
+                // 步骤 2：调用歌词对齐接口
+                var apiKey = $apiKey.value.trim();
+                var resp = await fetch('/api/align-lyrics', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        task_id: currentTaskId,
+                        lyrics_text: $lyricsInput.value,
+                        api_key: apiKey || null,
+                        language: $language.value === 'auto' ? null : $language.value,
+                        offset_seconds: parseFloat($offsetSec.value) || 0.3,
+                    }),
+                });
+
+                if (!resp.ok) {
+                    var err = await resp.json();
+                    throw new Error(err.detail || '配对失败');
+                }
+
+                var result = await resp.json();
+
+                // 步骤 3：渲染结果
+                $progressBar.style.width = '100%';
+                var modeText = result.mode === 'matched' ? '智能匹配' : '均匀分配';
+                $progressText.textContent = '配对完成! (' + modeText + ')';
+
+                segments = result.segments;
+
+                // 渲染统计（手动模式特有的统计信息）
+                $statsArea.innerHTML =
+                    '<div class="stat-item"><span class="label">配对模式</span><span class="value">' +
+                    modeText + '</span></div>' +
+                    '<div class="stat-item"><span class="label">歌曲时长</span><span class="value">' +
+                    formatTime(result.duration) + '</span></div>' +
+                    '<div class="stat-item"><span class="label">歌词行数</span><span class="value">' +
+                    result.segment_count + ' 句</span></div>';
+
+                renderLyricsTable();
+                initWaveSurfer(currentTaskId);
+                renderLrcOutput(result.lrc_text);
+
+                $editorCard.classList.add('active');
+                $lrcOutputCard.classList.add('active');
+
+                showToast('配对完成! 共 ' + result.segment_count + ' 句歌词 (' + modeText + ')');
+
+            } catch (err) {
+                $progressText.textContent = '出错了: ' + err.message;
+                $progressBar.style.width = '100%';
+                showToast('配对失败: ' + err.message, 4000);
+            } finally {
+                $btnAlign.disabled = false;
+            }
+        });
+
+        // ===== 结果渲染 =====
+
+        /** 渲染统计信息 */
+        function renderStats(result) {
+            var langMap = { 'zh': '中文', 'en': '英文', 'ja': '日语', 'ko': '韩语' };
+            var langName = langMap[result.language] || result.language;
+            $statsArea.innerHTML =
+                '<div class="stat-item"><span class="label">识别语言</span><span class="value">' +
+                langName + '（置信度 ' + result.language_probability + '%）</span></div>' +
+                '<div class="stat-item"><span class="label">歌曲时长</span><span class="value">' +
+                formatTime(result.duration) + '</span></div>' +
+                '<div class="stat-item"><span class="label">识别出</span><span class="value">' +
+                result.segment_count + ' 句歌词</span></div>';
+        }
+
+        /** 初始化 WaveSurfer 波形播放器 */
+        function initWaveSurfer(taskId) {
+            if (wavesurfer) {
+                wavesurfer.destroy();
+            }
+
+            wavesurfer = WaveSurfer.create({
+                container: '#waveform',
+                waveColor: '#4a4a6a',
+                progressColor: '#ec4141',
+                cursorColor: '#ff6b6b',
+                height: 80,
+                barWidth: 2,
+                barGap: 1,
+                barRadius: 2,
+                url: '/api/audio/' + taskId,
+            });
+
+            wavesurfer.on('ready', function() {
+                $totalTime.textContent = formatTime(wavesurfer.getDuration());
+            });
+
+            wavesurfer.on('timeupdate', function(currentTime) {
+                $currentTime.textContent = formatTime(currentTime);
+                highlightCurrentLine(currentTime);
+            });
+
+            wavesurfer.on('finish', function() {
+                isPlaying = false;
+                $btnPlay.innerHTML = '&#9654;';
+            });
+        }
+
+        /** 播放/暂停 */
+        $btnPlay.addEventListener('click', function() {
+            if (!wavesurfer) return;
+            wavesurfer.playPause();
+            isPlaying = !isPlaying;
+            $btnPlay.innerHTML = isPlaying ? '&#10074;&#10074;' : '&#9654;';
+        });
+
+        /** 高亮当前播放到的歌词行 */
+        function highlightCurrentLine(currentTime) {
+            var rows = $lyricsBody.querySelectorAll('tr');
+            var activeIndex = -1;
+
+            for (var i = segments.length - 1; i >= 0; i--) {
+                if (currentTime >= segments[i].start) {
+                    activeIndex = i;
+                    break;
+                }
+            }
+
+            rows.forEach(function(row, idx) {
+                if (idx === activeIndex) {
+                    row.classList.add('active');
+                    // 滚动到可视区域
+                    row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+                } else {
+                    row.classList.remove('active');
+                }
+            });
+        }
+
+        /** 渲染歌词编辑表格 */
+        function renderLyricsTable() {
+            $lyricsBody.innerHTML = '';
+
+            segments.forEach(function(seg, idx) {
+                var tr = document.createElement('tr');
+
+                // 序号
+                var tdIdx = document.createElement('td');
+                tdIdx.className = 'col-index';
+                tdIdx.textContent = idx + 1;
+
+                // 时间输入
+                var tdTime = document.createElement('td');
+                tdTime.className = 'col-time';
+                var timeInput = document.createElement('input');
+                timeInput.type = 'text';
+                timeInput.className = 'time-input';
+                timeInput.value = formatLrcTime(seg.start);
+                timeInput.dataset.index = idx;
+                timeInput.addEventListener('change', function() {
+                    var i = parseInt(this.dataset.index);
+                    segments[i].start = parseLrcTime(this.value);
+                });
+                tdTime.appendChild(timeInput);
+
+                // 歌词文本输入
+                var tdText = document.createElement('td');
+                tdText.className = 'col-text';
+                var textInput = document.createElement('input');
+                textInput.type = 'text';
+                textInput.className = 'text-input';
+                textInput.value = seg.text;
+                textInput.dataset.index = idx;
+                textInput.addEventListener('change', function() {
+                    var i = parseInt(this.dataset.index);
+                    segments[i].text = this.value;
+                });
+                tdText.appendChild(textInput);
+
+                // 操作按钮
+                var tdActions = document.createElement('td');
+                tdActions.className = 'col-actions';
+
+                // 播放此行
+                var playBtn = document.createElement('button');
+                playBtn.className = 'action-btn';
+                playBtn.innerHTML = '&#9654;';
+                playBtn.title = '播放此行';
+                playBtn.dataset.index = idx;
+                playBtn.addEventListener('click', function() {
+                    if (!wavesurfer) return;
+                    var i = parseInt(this.dataset.index);
+                    wavesurfer.seekTo(segments[i].start / wavesurfer.getDuration());
+                    wavesurfer.play();
+                    isPlaying = true;
+                    $btnPlay.innerHTML = '&#10074;&#10074;';
+                });
+
+                // 删除行
+                var delBtn = document.createElement('button');
+                delBtn.className = 'action-btn';
+                delBtn.innerHTML = '&#10005;';
+                delBtn.title = '删除此行';
+                delBtn.dataset.index = idx;
+                delBtn.addEventListener('click', function() {
+                    var i = parseInt(this.dataset.index);
+                    segments.splice(i, 1);
+                    renderLyricsTable();
+                });
+
+                tdActions.appendChild(playBtn);
+                tdActions.appendChild(delBtn);
+
+                tr.appendChild(tdIdx);
+                tr.appendChild(tdTime);
+                tr.appendChild(tdText);
+                tr.appendChild(tdActions);
+
+                // 点击行跳转播放
+                tr.addEventListener('dblclick', function() {
+                    if (!wavesurfer) return;
+                    var i = parseInt(timeInput.dataset.index);
+                    wavesurfer.seekTo(segments[i].start / wavesurfer.getDuration());
+                });
+
+                $lyricsBody.appendChild(tr);
+            });
+        }
+
+        /** 添加新歌词行 */
+        $btnAddLine.addEventListener('click', function() {
+            var lastEnd = segments.length > 0 ? segments[segments.length - 1].end || segments[segments.length - 1].start + 3 : 0;
+            segments.push({ start: lastEnd, end: lastEnd + 3, text: '' });
+            renderLyricsTable();
+            // 滚动到底部
+            var container = $lyricsBody.parentElement;
+            if (container) container.scrollTop = container.scrollHeight;
+        });
+
+        /** 刷新 LRC 输出 */
+        $btnRefreshLrc.addEventListener('click', async function() {
+            try {
+                var resp = await fetch('/api/format-lrc', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        segments: segments,
+                        offset_seconds: parseFloat($offsetSec.value) || 0.3,
+                    }),
+                });
+                var data = await resp.json();
+                renderLrcOutput(data.lrc_text);
+                showToast('LRC 已刷新');
+            } catch (err) {
+                showToast('刷新失败: ' + err.message);
+            }
+        });
+
+        /** 渲染 LRC 输出文本 */
+        function renderLrcOutput(lrcText) {
+            $lrcTextarea.value = lrcText;
+        }
+
+        // ===== 复制和下载 =====
+
+        /** 一键复制到剪贴板 */
+        $btnCopy.addEventListener('click', async function() {
+            try {
+                await navigator.clipboard.writeText($lrcTextarea.value);
+                showToast('已复制到剪贴板! 可直接粘贴到网易云');
+            } catch (err) {
+                // 回退方案
+                $lrcTextarea.select();
+                document.execCommand('copy');
+                showToast('已复制到剪贴板!');
+            }
+        });
+
+        /** 下载 .lrc 文件 */
+        $btnDownload.addEventListener('click', function() {
+            var blob = new Blob([$lrcTextarea.value], { type: 'text/plain;charset=utf-8' });
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            var name = currentFile ? currentFile.name.replace(/\.[^.]+$/, '') : 'lyrics';
+            a.href = url;
+            a.download = name + '.lrc';
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast('LRC 文件已下载');
+        });
+
+    })();
+    </script>
+</body>
+</html>
