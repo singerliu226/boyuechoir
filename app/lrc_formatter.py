@@ -108,7 +108,7 @@ class LrcFormatter:
             lines.append(f"[ar:{artist}]")
 
         # 记录工具信息
-        lines.append("[by:LyricSync]")
+        lines.append("[by:泊乐滚动歌词工具]")
 
         # 添加空行分隔元信息和歌词
         if lines:
@@ -156,7 +156,7 @@ class LrcFormatter:
         if artist:
             lines.append(f"[ar:{artist}]")
 
-        lines.append("[by:LyricSync]")
+        lines.append("[by:泊乐滚动歌词工具]")
 
         if lines:
             lines.append("")

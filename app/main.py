@@ -61,8 +61,8 @@ MAX_FILE_SIZE = 100 * 1024 * 1024
 
 # ----- FastAPI 应用 -----
 app = FastAPI(
-    title="LyricSync - 网易云歌词自动对齐工具",
-    description="上传音频，自动生成带时间轴的 LRC 歌词",
+    title="泊乐网易云滚动歌词工具",
+    description="上传音频，AI 自动生成带时间轴的滚动歌词",
     version="1.0.0",
 )
 
@@ -827,7 +827,7 @@ async def index():
     """返回 Web UI 首页"""
     index_path = os.path.join(STATIC_DIR, "index.html")
     if not os.path.isfile(index_path):
-        return HTMLResponse("<h1>LyricSync</h1><p>前端文件未找到</p>", status_code=500)
+        return HTMLResponse("<h1>泊乐网易云滚动歌词工具</h1><p>前端文件未找到</p>", status_code=500)
     return FileResponse(index_path)
 
 
@@ -835,7 +835,7 @@ async def index():
 
 if __name__ == "__main__":
     import uvicorn
-    logger.info("启动 LyricSync 服务...")
+    logger.info("启动泊乐网易云滚动歌词工具...")
     uvicorn.run(
         "app.main:app",
         host="0.0.0.0",
